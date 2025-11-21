@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PANDORA17</title>
+<link href="https://db.onlinewebfonts.com/c/bb018e64d01355748d8ddc53553850b9?family=Cerebri+Sans+Regular" rel="stylesheet">
+<link href="https://db.onlinewebfonts.com/c/87de6bcedaa28b9a81b24587815faf41?family=Felix+Titling" rel="stylesheet">
+<style>
+@import url(https://db.onlinewebfonts.com/c/bb018e64d01355748d8ddc53553850b9?family=Cerebri+Sans+Regular);
+@import url(https://db.onlinewebfonts.com/c/87de6bcedaa28b9a81b24587815faf41?family=Felix+Titling);
+/* Global resets for full screen background */
+html, body {
+    margin: 0; 
+    padding: 0;
+    height: 100%;
+}
+
+
+/* Background Image Styling */
+body {
+    background-image: url('PANDORA.png');
+    background-repeat: no-repeat;
+    background-position: center top;
+    background-size: cover;
+    background-attachment: fixed;
+    position: relative;
+}
+
+/* --- NEW: Logo Group Styling --- */
+.logo-group {
+    position: absolute;
+    top: 30px;
+    left: 50px; /* Positions the group on the top-left */
+    z-index: 10;
+
+    display: flex; /* Aligns the two logos horizontally */
+    align-items: center;
+    gap: 15px; /* Space between the two logos */
+}
+
+/* Ensures images don't have default spacing */
+.logo-group img {
+    display: block; 
+}
+/* ------------------------------- */
+
+
+/* Navigation Links Container (Centered) */
+.nav-links-container {
+    position: absolute;
+    top: 50px; /* Needs to align with the center of the logos */
+    left: 50%;
+    transform: translateX(-50%); 
+    z-index: 10;
+    
+    display: flex; 
+    align-items: center; 
+}
+
+/* Navigation Links Styling */
+.nav-links-container a {
+    color: white; 
+    text-decoration: none;
+    margin: 0 35px; 
+    font-family: sans-serif;
+    font-size: 1.1em;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+.nav-links-container a:hover {
+    color: #c2ff3f;
+}
+
+
+/* CTA Button Styling */
+.cta-button {
+    position: absolute;
+    top: 40px; /* Aligned vertically with the logos and nav links */
+    right: 50px;
+    z-index: 10;
+}
+
+.cta-button a {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #c2ff3f;
+    color: #1a1a1a;
+    text-decoration: none;
+    font-family: sans-serif;
+    font-weight: bold;
+    font-size: 1em;
+    border-radius: 50px;
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+.cta-button a:hover {
+    background-color: #9ecc31;
+    transform: scale(1.05);
+}
+
+
+/* Text Container Styling */
+.center-text {
+    position: absolute;
+    top: 30%; 
+    left: 50%;
+    transform: translate(-50%, -50%); 
+    text-align: center;
+    color: white;
+    text-shadow: 2px 2px 4px #000000;
+    z-index: 5;
+    width: 90%;
+}
+
+.main-title {
+    font-size: 6em;
+    margin: 0;
+    line-height: 1.1;
+    font-family: "Felix Titling"; 
+    color: #c2ff3f;
+}
+
+.caption {
+    font-size: 1.5em;
+    margin-top: 5px;
+    font-family: "Cerebri Sans Regular";
+    font-weight: bold;
+}
+</style>
+</head>
+<body>
+    
+    <div class="logo-group">
+        <a href="https://sites.google.com/view/lgztechnologies?fbclid=IwY2xjawOKtyxleHRuA2FlbQIxMABicmlkETEwUnRSc3FOOHVPVGhkUFVoc3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHis8oo9iv9DNTappqXUkhUqWbI9fnSRRFg1aWm1o69q2UODbo1PxgKdf8ZSC_aem_BdwzXkTfwN5jCPrVPqUVAw" class="company-logo-link">
+            <img src="LGZ.png" alt="Company Logo" width="50" height="50">
+        </a>
+        
+        <a href="https://www.canva.com/design/DAG4yZgM3tk/vViv8d52luXf5_7MfpkSCg/view?utm_content=DAG4yZgM3tk&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h58d1897761" class="pandora-logo-link">
+            <img src="logo.png" alt="PANDORA Logo" width="50" height="50">
+        </a>
+    </div>
+
+    <nav class="nav-links-container">
+        <a href="pan-pan.html">PAN-PAN</a>
+        <a href="dora.html">DORA</a>
+    </nav>
+    
+    <div class="cta-button">
+        <a href="get-started.html">Get Started</a>
+    </div>
+
+    <div class="center-text">
+        <h1 class="main-title">PANDORA</h1>
+        <p class="caption">Unlocking <i>Integrity</i> &nbsp;in Public Projects</p>
+    </div>
+    
+</body>
+</html>

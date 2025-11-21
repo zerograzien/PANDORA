@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAN-PAN</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <link href="https://db.onlinewebfonts.com/c/87de6bcedaa28b9a81b24587815faf41?family=Felix+Titling" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #3e0f36; /* Dark Purple */
+            --color-neon: #c2ff3f; /* Neon Green */
+            --color-white: #ffffff;
+            --color-input-bg: #2a0a25;
+            --color-title: #c2ff3f;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--color-white);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+        h1 {
+            font-family: "Felix Titling"; /* H1 font applied via inline style/CSS */
+            color: var(--color-title);
+            text-shadow: 1px 1px 3px rgba(194, 255, 63, 0.4);
+            font-size: 3rem;
+            font-weight: 900;
+        }
+        h2, h3, h4 {
+            color: var(--color-neon);
+            margin-top: 1rem;
+        }
+        /* Custom scrollbar for better visual integration */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: gray;
+            border-radius: 10px;
+        }
+        .input-style {
+            background-color: var(--color-input-bg);
+            color: white;
+            border: 1px solid #f1f3ec; 
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            width: 100%;
+        }
+        .btn-primary {
+            background-color: var(--color-neon);
+            color: #000000;
+            font-weight: 700;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #a4e634;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid var(--color-neon);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Initial state classes */
+        .initial-input-container {
+            /* flex-col ensures vertical stacking on mobile/initial, mx-auto centers the block */
+            max-width: 40rem; /* Same as the previous max-w-4xl for initial centering */
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 40px;
+        }
+        /* Transition class for smooth movement */
+        .layout-transition {
+            transition: all 0.5s ease-in-out;
+        }
+        /* Tailwind's standard library doesn't include w-3/5 and w-2/5. We add them here for responsiveness */
+        @media (min-width: 768px) {
+            .md\:w-3\/5 { width: 60%; }
+            .md\:w-2\/5 { width: 40%; }
+        }
+    </style>
+</head>
+<body>
+
+    <a href="index.html" class="fixed top-30 left-50 z-50 transition-transform duration-300 hover:scale-105" title="Go back to main page">
+        <div class="text-2xl font-black" style="color: var(--color-neon);">
+            <img src="logo.png" alt="PANDORA Logo" width="50" height="50">
+        </div>
+    </a>
+    <div id="message-box" class="fixed top-4 left-1/2 transform -translate-x-1/2 p-4 rounded-lg shadow-xl z-50 transition-opacity duration-300 opacity-0 pointer-events-none text-sm font-semibold"></div>
+
+    <div id="main-content-wrapper" class="flex flex-col gap-8 max-w-6xl mx-auto layout-transition">
+        
+        <div id="input-controls" class="initial-input-container text-center layout-transition">
+            <h1 id="app-title" class="mb-6 text-4xl font-black">ABC Estimator</h1>
+            
+            <p id="app-description" class="mb-4 text-white-300">Describe your construction project below to determine the type, size, and relevant material costs. Examples: 'Build a road 2500m long 12 meters wide', 'New building with 500 sq. m floor area 3 stories high', or 'Bridge from Cebu City to Mactan Island 50 meters high'.</p>
+
+            <textarea id="project-description" class="input-style h-24 mb-6" placeholder="Enter project description..."></textarea>
+
+            <div id="input-btn-wrapper" class="flex items-center space-x-4 mb-8 justify-start">
+                <button id="generate-btn" class="btn-primary flex items-center justify-center">
+                    Generate ABC
+                </button>
+                <div id="loading-indicator" class="loading-spinner hidden"></div>
+            </div>
+        </div>
+
+        <div id="results-container" class="space-y-8 w-full hidden">
+            </div>
+    </div>
+
+    <script>
+        // --- Configuration Constants ---
+        const DEFAULT_WIDTH_M = 7.3; // Standard 2-lane road width
+        
+        // ABC Financial Adjustment Constants (matching the Python rates)
+        const INCIDENTAL_EXPENSE_RATE = 0.05;
+        const INFLATION_FACTOR = 0.03;
+        const FINANCIAL_RISK_ADJUSTMENT = 0.02;
+
+        // Cost Data (Simplified and hardcoded, matching Python logic structure)
+        const COST_RATES = {
+            // General Material Costs
+            "concrete": { rate: 6000, unit: "PHP/cu.m" },
+            "steel_rebar": { rate: 70, unit: "PHP/kg" },
+            "asphalt": { rate: 25000, unit: "PHP/ton" },
+            "gravel_base": { rate: 1500, unit: "PHP/cu.m" },
+            "sand": { rate: 800, unit: "PHP/cu.m" },
+            "drainage_pipe": { rate: 2500, unit: "PHP/meter" },
+            
+            // Labor and Overhead (Based on Base Cost)
+            "_labor_multiplier": 0.35, // 35% of Materials
+            "_overhead_profit": 0.20, // 20% of Materials + Labor
+            
+            // Man-day rates (for duration estimation)
+            "_man_day_rate_cu_m": 0.15, // Man-days per cubic meter of total volume/area work
+            "_man_day_rate_sq_m": 0.05, // Man-days per square meter of road/decking
+        };
+
+        // --- DOM Elements ---
+        const mainWrapper = document.getElementById('main-content-wrapper');
+        const inputControls = document.getElementById('input-controls');
+        const inputBtnWrapper = document.getElementById('input-btn-wrapper');
+        const appTitle = document.getElementById('app-title');
+        const appDescription = document.getElementById('app-description');
+        const descriptionInput = document.getElementById('project-description');
+        const generateBtn = document.getElementById('generate-btn');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const resultsContainer = document.getElementById('results-container');
+        const messageBox = document.getElementById('message-box'); 
+        
+        // --- OpenCage Geocoding Configuration ---
+        // IMPORTANT: Replace this placeholder with your actual OpenCage API Key
+        const GEOCODING_API_KEY = "cf8d4d6d9d274d7592b1fa3bc8c9bf36"; 
+        
+        let GEOPY_AVAILABLE = false; // Flag to indicate if real geocoding was used
+
+        // --- Utility Functions ---
+
+        /**
+         * Displays a non-blocking message to the user (replaces alert()).
+         */
+        function displayMessage(message, type = 'info') {
+            let bgColor = 'bg-gray-700';
+            let textColor = 'text-white';
+            
+            if (type === 'error') {
+                bgColor = 'bg-red-700';
+            } else if (type === 'success') {
+                bgColor = 'bg-green-700';
+            }
+
+            // Set classes for visibility and style
+            messageBox.className = `fixed top-4 left-1/2 transform -translate-x-1/2 p-4 rounded-lg shadow-xl z-50 transition-opacity duration-300 ${bgColor} ${textColor} opacity-100`;
+            messageBox.innerHTML = message;
+            
+            // Auto-hide after 4 seconds
+            setTimeout(() => {
+                messageBox.classList.remove('opacity-100');
+                messageBox.classList.add('opacity-0');
+                // Prevent click/touch interactions while invisible
+                setTimeout(() => messageBox.classList.add('pointer-events-none'), 300); 
+            }, 4000);
+        }
+
+        // --- Geocoding and Distance Calculation Functions ---
+
+        /**
+         * Converts a location name to latitude and longitude coordinates using OpenCage.
+         */
+        async function geocodeLocation(locationName) {
+            if (!locationName || GEOCODING_API_KEY === "YOUR_OPENCAGE_API_KEY") return null;
+
+            const url = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(locationName)}&key=${GEOCODING_API_KEY}&limit=1`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {
+                    const location = data.results[0].geometry;
+                    return { lat: location.lat, lng: location.lng };
+                }
+                console.warn(`Geocoding failed for ${locationName}: ${data.status.message || 'No results'}`);
+                return null;
+            } catch (error) {
+                console.error("Geocoding fetch error:", error);
+                return null;
+            }
+        }
+
+        /**
+         * Calculates the distance between two coordinates using the Haversine formula.
+         * Returns distance in kilometers.
+         */
+        function calculateDistanceKm(coord1, coord2) {
+            const R = 6371; // Radius of Earth in kilometers
+            
+            // Convert degrees to radians
+            const lat1 = coord1.lat * (Math.PI / 180);
+            const lon1 = coord1.lng * (Math.PI / 180);
+            const lat2 = coord2.lat * (Math.PI / 180);
+            const lon2 = coord2.lng * (Math.PI / 180);
+
+            const dLat = lat2 - lat1;
+            const dLon = lon2 - lon1;
+
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1) * Math.cos(lat2) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            
+            return R * c;
+        }
+
+        /**
+         * Mocks the Gemini API by extracting structured parameters using simple regex and keyword analysis.
+         * Now includes optional OpenCage geocoding for distance.
+         */
+        async function mockInterpretPrompt(prompt) {
+            const lowerPrompt = prompt.toLowerCase();
+            const params = {
+                type: "unknown",
+                length_meters: 0,
+                width_meters: 0,
+                area_sqm: 0,
+                height_stories: 1,
+                location_a: "",
+                location_b: "",
+                distance_km: 0 // Default to 0, only updated by API or explicit user input
+            };
+
+            // 1. Determine Project Type (Existing Logic)
+            if (lowerPrompt.includes("road") || lowerPrompt.includes("highway") || lowerPrompt.includes("expressway")) {
+                params.type = 'road';
+            } else if (lowerPrompt.includes("bridge") || lowerPrompt.includes("viaduct")) {
+                params.type = 'bridge';
+            } else if (lowerPrompt.includes("building") || lowerPrompt.includes("hospital") || lowerPrompt.includes("mall")) {
+                params.type = 'building';
+            } else if (lowerPrompt.includes("classroom") || lowerPrompt.includes("school")) {
+                params.type = 'classroom';
+                params.area_sqm = 200; 
+            } else if (lowerPrompt.includes("drainage") || lowerPrompt.includes("sewer")) {
+                params.type = 'drainage system';
+            } else {
+                 params.type = 'unknown';
+            }
+
+            // 2. Extract Dimensions (Existing Logic)
+            let match = lowerPrompt.match(/(\d+(?:\.\d+)?)\s*m(?:eters| long)?/);
+            if (match) params.length_meters = parseFloat(match[1]);
+            if (params.type === 'road' && params.length_meters === 0) params.length_meters = 1000;
+            if (params.type === 'bridge' && params.length_meters === 0) params.length_meters = 100;
+            if (params.type === 'drainage system' && params.length_meters === 0) params.length_meters = 500;
+
+            match = lowerPrompt.match(/(\d+(?:\.\d+)?)\s*m(?:eters)?\s*wide/);
+            if (match) {
+                params.width_meters = parseFloat(match[1]);
+            } else if (params.type === 'road' || params.type === 'bridge') {
+                 params.width_meters = DEFAULT_WIDTH_M; 
+            }
+
+            match = lowerPrompt.match(/(\d+(?:\.\d+)?)\s*sq\.?\s*m/);
+            if (match) {
+                params.area_sqm = parseFloat(match[1]);
+            } else if (lowerPrompt.includes("floor area")) {
+                 match = lowerPrompt.match(/(\d+(?:\.\d+)?)\s*(sq\.?\s*m)?/); 
+                 if (match) params.area_sqm = parseFloat(match[1]);
+            }
+            if ((params.type === 'building' || params.type === 'classroom') && params.area_sqm === 0) params.area_sqm = 200;
+
+            match = lowerPrompt.match(/(\d+)\s*(?:stories|floors)\s*(?:high)?/);
+            if (match) params.height_stories = parseInt(match[1]);
+
+            // 3. Extract Locations (Existing Logic)
+            const fromToMatch = lowerPrompt.match(/from\s+([a-zA-Z\s]+)\s+to\s+([a-zA-Z\s]+)/);
+            if (fromToMatch) {
+                params.location_a = fromToMatch[1].trim().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                params.location_b = fromToMatch[2].trim().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                
+                // *** API Geocoding Attempt (No simulated fallback) ***
+                if (GEOCODING_API_KEY !== "YOUR_OPENCAGE_API_KEY") {
+                     const coordA = await geocodeLocation(params.location_a);
+                     const coordB = await geocodeLocation(params.location_b);
+                     
+                     if (coordA && coordB) {
+                         params.distance_km = calculateDistanceKm(coordA, coordB);
+                         GEOPY_AVAILABLE = true; // Set flag for display
+                     }
+                     // If geocoding fails, distance_km remains 0.
+                }
+            }
+
+            // Extract specified distance in km (overrides geocoded if specified)
+            match = lowerPrompt.match(/(\d+(?:\.\d+)?)\s*k(?:m|ilometers)/);
+            if (match) {
+                 params.distance_km = parseFloat(match[1]);
+                 GEOPY_AVAILABLE = false; // Specified distance trumps calculated distance
+            }
+            
+            // Enforce mandatory defaults (Existing Logic)
+            if (params.type === 'road' && params.length_meters === 0) params.length_meters = 1000;
+            // ... (other default enforcement) ...
+
+            // Simulate a slight delay for better UX (as if an API call happened)
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            return params;
+        }
+        
+        function calculateEstimate(params) {
+            // ... (same as before) ...
+            const projectType = params.type;
+            let totalMaterialsCost = 0;
+            let detailedEstimate = {};
+            let totalManDays = 0;
+
+            // --- 1. Material and Volume Calculations ---
+            
+            if (projectType === 'road') {
+                const length = params.length_meters || 1000;
+                const width = params.width_meters || DEFAULT_WIDTH_M;
+                
+                // Road volume calculation (simplified standard depth: 0.5m total)
+                const volume = length * width * 0.5; 
+                
+                // Road base (gravel) - 60% of volume
+                const gravelVolume = volume * 0.6;
+                const gravelCost = gravelVolume * COST_RATES.gravel_base.rate;
+                detailedEstimate.gravel_base = { 
+                    rate: COST_RATES.gravel_base.rate, 
+                    rate_unit: COST_RATES.gravel_base.unit, 
+                    quantity: gravelVolume, 
+                    unit_price: COST_RATES.gravel_base.rate, 
+                    total_cost: gravelCost 
+                };
+                totalMaterialsCost += gravelCost;
+
+                // Asphalt Paving - 40% of volume (simplified to concrete/asphalt mix volume)
+                const asphaltVolume = volume * 0.4;
+                const asphaltWeightTons = asphaltVolume * 2.3; // Approx density of asphalt is 2.3 tons/cu.m
+                const asphaltCost = asphaltWeightTons * COST_RATES.asphalt.rate;
+                detailedEstimate.asphalt_mix = { 
+                    rate: COST_RATES.asphalt.rate, 
+                    rate_unit: COST_RATES.asphalt.unit, 
+                    quantity: asphaltWeightTons, 
+                    unit_price: COST_RATES.asphalt.rate, 
+                    total_cost: asphaltCost 
+                };
+                totalMaterialsCost += asphaltCost;
+
+                // Man-days based on linear length and area
+                totalManDays = (length * 0.05) + (length * width * COST_RATES._man_day_rate_sq_m);
+
+
+            } else if (projectType === 'building' || projectType === 'classroom') {
+                const baseArea = params.area_sqm || 200;
+                const stories = params.height_stories || 1;
+                const totalArea = baseArea * stories;
+
+                // Simplified material estimation for structural components per sq.m of floor area
+                // Concrete/Foundation (0.25 cu.m/sq.m)
+                const concreteVolume = totalArea * 0.25;
+                const concreteCost = concreteVolume * COST_RATES.concrete.rate;
+                detailedEstimate.structural_concrete = { 
+                    rate: COST_RATES.concrete.rate, 
+                    rate_unit: COST_RATES.concrete.unit, 
+                    quantity: concreteVolume, 
+                    unit_price: COST_RATES.concrete.rate, 
+                    total_cost: concreteCost 
+                };
+                totalMaterialsCost += concreteCost;
+
+                // Steel Rebar (35 kg/sq.m of total floor area)
+                const steelWeight = totalArea * 35; 
+                const steelCost = steelWeight * COST_RATES.steel_rebar.rate;
+                detailedEstimate.reinforcing_steel = { 
+                    rate: COST_RATES.steel_rebar.rate, 
+                    rate_unit: COST_RATES.steel_rebar.unit, 
+                    quantity: steelWeight, 
+                    unit_price: COST_RATES.steel_rebar.rate, 
+                    total_cost: steelCost 
+                };
+                totalMaterialsCost += steelCost;
+                
+                // Add finishing/architectural materials (simulated as 50% of structural cost)
+                const finishingCost = (concreteCost + steelCost) * 0.5;
+                detailedEstimate.finishing_materials = { 
+                    rate: 1, 
+                    rate_unit: "Lump Sum", 
+                    quantity: 1, 
+                    unit_price: finishingCost, 
+                    total_cost: finishingCost
+                };
+                totalMaterialsCost += finishingCost;
+
+                // Man-days based on total floor area
+                totalManDays = totalArea * COST_RATES._man_day_rate_cu_m * 2; // Higher multiplier for buildings
+
+            } else if (projectType === 'bridge') {
+                const length = params.length_meters || 100;
+                const width = params.width_meters || 10;
+                
+                // Bridge Deck/Pillars (Simplified: 1.5 cu.m of concrete per linear meter of bridge, plus deck)
+                const concreteVolume = length * 1.5 + (length * width * 0.5); // Deck volume: L * W * 0.5m depth
+                const concreteCost = concreteVolume * COST_RATES.concrete.rate * 1.5; // Bridge concrete is denser/higher grade
+                detailedEstimate.high_grade_concrete = { 
+                    rate: COST_RATES.concrete.rate * 1.5, 
+                    rate_unit: COST_RATES.concrete.unit, 
+                    quantity: concreteVolume, 
+                    unit_price: COST_RATES.concrete.rate * 1.5, 
+                    total_cost: concreteCost 
+                };
+                totalMaterialsCost += concreteCost;
+
+                // Steel Rebar (100 kg/sq.m of deck area)
+                const deckArea = length * width;
+                const steelWeight = deckArea * 100; 
+                const steelCost = steelWeight * COST_RATES.steel_rebar.rate;
+                detailedEstimate.high_tension_steel = { 
+                    rate: COST_RATES.steel_rebar.rate, 
+                    rate_unit: COST_RATES.steel_rebar.unit, 
+                    quantity: steelWeight, 
+                    unit_price: COST_RATES.steel_rebar.rate, 
+                    total_cost: steelCost 
+                };
+                totalMaterialsCost += steelCost;
+
+                // Man-days based on volume and complexity
+                totalManDays = concreteVolume * 0.5 + steelWeight * 0.005; // High man-day rate for complexity
+
+            } else if (projectType === 'drainage system') {
+                const length = params.length_meters || 500;
+                
+                // Drainage pipe cost
+                const pipeCost = length * COST_RATES.drainage_pipe.rate;
+                detailedEstimate.drainage_pipe = { 
+                    rate: COST_RATES.drainage_pipe.rate, 
+                    rate_unit: COST_RATES.drainage_pipe.unit, 
+                    quantity: length, 
+                    unit_price: COST_RATES.drainage_pipe.rate, 
+                    total_cost: pipeCost 
+                };
+                totalMaterialsCost += pipeCost;
+
+                // Trenching and Backfill (Sand/Gravel/Labor) - simulated as 50% of pipe cost
+                const excavationCost = pipeCost * 0.5;
+                detailedEstimate.excavation_work = { 
+                    rate: 1, 
+                    rate_unit: "Lump Sum", 
+                    quantity: 1, 
+                    unit_price: excavationCost, 
+                    total_cost: excavationCost
+                };
+                totalMaterialsCost += excavationCost;
+
+                // Man-days based on linear length
+                totalManDays = length * 0.1;
+            } else {
+                 // Fallback for unknown/unspecified project types
+                 totalMaterialsCost = 5000000; // Default P5M
+                 totalManDays = 5000;
+                 detailedEstimate.default_materials = {
+                     rate: 1, rate_unit: "Lump Sum", quantity: 1, unit_price: totalMaterialsCost, total_cost: totalMaterialsCost
+                    }
+            }
+            
+            // --- 2. Labor and Overhead/Profit Calculations (Based on totalMaterialsCost) ---
+            
+            const laborCost = totalMaterialsCost * COST_RATES._labor_multiplier;
+            const subtotal_before_overhead = totalMaterialsCost + laborCost;
+            const overheadProfit = subtotal_before_overhead * COST_RATES._overhead_profit;
+
+            const baseEstimatedCost = subtotal_before_overhead + overheadProfit;
+            
+            // Add labor and overhead to detailed estimate
+            detailedEstimate._labor = {
+                Material: "Direct Labor Cost",
+                "Quantity Required": `${(COST_RATES._labor_multiplier * 100).toFixed(0)}% of Material Cost`,
+                "Unit Price": "Based on Man-Days",
+                "Total Cost": laborCost
+            };
+            detailedEstimate._overhead = {
+                Material: "Overhead and Profit",
+                "Quantity Required": `${(COST_RATES._overhead_profit * 100).toFixed(0)}% of (Materials + Labor)`,
+                "Unit Price": "Fixed Rate",
+                "Total Cost": overheadProfit
+            };
+            detailedEstimate._total_man_days = totalManDays; // Store for proposal calculation
+
+            return { base_estimated_cost: baseEstimatedCost, detailed_estimate: detailedEstimate };
+        }
+
+        /**
+         * Switches the layout from centered single-column to split-screen (input right, results left).
+         */
+        // Function: postClickLayout()
+        function postClickLayout() {
+            // 1. Change the main wrapper to a horizontal flex container (md:flex-row)
+            mainWrapper.classList.add('md:flex-row');
+            mainWrapper.classList.remove('flex-col'); 
+
+            // 2. Change the input container to 40% width and add border
+            // IMPORTANT: Changed from md:w-1/2 to md:w-2/5
+            inputControls.classList.remove('initial-input-container', 'text-center', 'md:w-1/2');
+            // *** CHANGE APPLIED HERE: Reduced padding-left from 8 (2rem) to 4 (1rem) ***
+            inputControls.classList.add('md:w-2/5', 'md:order-last', 'md:border-l', 'md:border-gray-600', 'md:pl-4', 'md:pt-0'); 
+            
+            // 3. TITLE ALIGNMENT: Keep the title centered within the new right container
+            appTitle.classList.add('text-center'); 
+            
+            // 4. DESCRIPTION ALIGNMENT: Align the description text to the left within the new right container
+            appDescription.classList.remove('text-center');
+            appDescription.classList.add('md:text-left');
+
+            // 5. Set the results container to be 60% width and on the left
+            // IMPORTANT: Changed from md:w-1/2 to md:w-3/5
+            resultsContainer.classList.remove('hidden', 'w-full', 'md:w-1/2');
+            resultsContainer.classList.add('md:w-3/5', 'md:order-first'); 
+        }
+        
+        /**
+         * The main handler function for the button click.
+         */
+        async function generateABC() {
+            const description = descriptionInput.value.trim();
+            if (description.length < 10) {
+                displayMessage("Please enter a more detailed project description (minimum 10 characters).", 'error');
+                return;
+            }
+
+            // Apply the layout change *before* fetching the results
+            postClickLayout();
+
+            resultsContainer.innerHTML = '';
+            generateBtn.disabled = true;
+            loadingIndicator.classList.remove('hidden');
+
+            try {
+                // 1. Interpret the prompt using the mock function
+                const extractedParams = await mockInterpretPrompt(description);
+                const projectType = extractedParams.type;
+
+                // 2. Calculate the base estimate
+                const { base_estimated_cost, detailed_estimate } = calculateEstimate(extractedParams);
+                
+                // --- Final ABC Calculation ---
+                const incidentalExpenseCost = base_estimated_cost * INCIDENTAL_EXPENSE_RATE;
+                const inflationCost = base_estimated_cost * INFLATION_FACTOR;
+                const financialRiskCost = base_estimated_cost * FINANCIAL_RISK_ADJUSTMENT;
+                
+                const finalABC = base_estimated_cost + incidentalExpenseCost + inflationCost + financialRiskCost;
+                
+                const totalManDays = detailed_estimate._total_man_days || 0;
+                
+                // --- Crew and Duration Calculation for Unified Proposals ---
+                const TARGET_DURATION_AGGRESSIVE = 90;
+                const TARGET_DURATION_STANDARD = 180;
+                const TARGET_DURATION_BUDGET = 360;
+
+                let crewAggressive = 1, crewStandard = 1, crewBudget = 1;
+                if (totalManDays > 0) {
+                    crewAggressive = Math.max(1, Math.ceil(totalManDays / TARGET_DURATION_AGGRESSIVE));
+                    crewStandard = Math.max(1, Math.ceil(totalManDays / TARGET_DURATION_STANDARD));
+                    crewBudget = Math.max(1, Math.ceil(totalManDays / TARGET_DURATION_BUDGET));
+                }
+
+                const allProposals = [
+                    { name: "Aggressive Timeline", crew_size: crewAggressive, target_days: TARGET_DURATION_AGGRESSIVE, color: "#ef4444"},
+                    { name: "Standard Timeline", crew_size: crewStandard, target_days: TARGET_DURATION_STANDARD, color: "#3b82f6"},
+                    { name: "Budget Timeline", crew_size: crewBudget, target_days: TARGET_DURATION_BUDGET, color: "#f97316"}
+                ];
+
+                // 3. Inject Results into DOM
+                // *** FIX: Changed incidentalCost to incidentalExpenseCost ***
+                renderResults(finalABC, extractedParams, projectType, detailed_estimate, base_estimated_cost, incidentalExpenseCost, inflationCost, financialRiskCost, allProposals);
+                displayMessage("Cost estimate successfully generated!", 'success');
+
+            } catch (error) {
+                console.error("An error occurred during estimation:", error);
+                // Non-blocking error message
+                displayMessage("Error: Failed to process request. Try a different prompt.", 'error');
+                // Persist error in results container for user to see details
+                resultsContainer.innerHTML = `<div class="bg-red-900 border border-red-500 text-white p-4 rounded-lg">Error: Failed to process request. Please check the console for details or try a different prompt.</div>`;
+                // Ensure results container is visible even on error
+                resultsContainer.classList.remove('hidden');
+            } finally {
+                generateBtn.disabled = false;
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Renders all calculated results into the DOM.
+         */
+        function renderResults(finalABC, params, projectType, detailedEstimate, baseCost, incidentalCost, inflationCost, riskCost, proposals) {
+            let html = `
+                <div class="border-t border-b border-gray-700 py-4 mb-6">
+                    <h2 class="text-2xl font-bold mb-2">💰 Final Approved Budget for the Contract (ABC):</h2>
+                    <div class="text-4xl font-extrabold text-white bg-green-700/80 p-4 rounded-lg shadow-lg">
+                        P ${finalABC.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                </div>
+            `;
+
+            // --- Proposal Comparison ---
+            html += `<h2 class="text-xl font-semibold mb-4">📊 Project Proposal Comparison (Estimated Manpower)</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">`;
+
+            proposals.forEach(p => {
+                html += `
+                    <div class="p-4 rounded-xl shadow-lg border border-gray-700/50 bg-gray-800/30">
+                        <h3 class="text-lg font-bold text-white mb-2" style="color: ${p.color};">${p.name}</h3>
+                        
+                        <div class="flex items-center justify-between mt-2">
+                            <span class="text-sm font-semibold text-gray-300">Target Duration:</span>
+                            <span class="text-lg font-extrabold text-white">${p.target_days.toLocaleString()} Days</span>
+                        </div>
+                        
+                        <div style="background-color: ${p.color}; color: black; padding: 10px; border-radius: 8px; text-align: center; margin-top: 10px;">
+                            <div class="text-lg font-bold">${p.crew_size.toLocaleString()} Workers</div>
+                            <div class="text-xs font-semibold">(Estimated Crew Size)</div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+            
+            // --- Extracted Parameters ---
+            html += `<h3 class="text-xl font-semibold border-b border-gray-700 pb-2 mb-4">Extracted Project Parameters:</h3>`;
+            
+            // Modify params for display clarity
+            const displayParams = { ...params };
+            if (displayParams.location_a && displayParams.distance_km > 0) {
+                const source = GEOPY_AVAILABLE ? "(Calculated via OpenCage Geocoding)" : "(Manually specified)";
+                displayParams.distance_km = `${displayParams.distance_km.toFixed(2)} km ${source}`;
+            } else if (displayParams.location_a && displayParams.distance_km === 0) {
+                displayParams.distance_km = "N/A - Geocoding failed or API key is missing.";
+            }
+
+            if (projectType === "building" || projectType === "classroom") {
+                const totalArea = displayParams.area_sqm * displayParams.height_stories;
+                displayParams.area_sqm = `${displayParams.area_sqm.toFixed(2)} sq.m. (${displayParams.height_stories} stories, Total Floor Area: ${totalArea.toFixed(2)} sq.m.)`;
+            }
+            if (displayParams.width_meters && (projectType === "road" || projectType === "bridge")) {
+                displayParams.width_meters = `${displayParams.width_meters.toFixed(2)} m (Base for calculation: ${DEFAULT_WIDTH_M} m)`;
+            }
+
+            html += `<pre class="bg-gray-800/50 p-4 rounded-lg text-sm overflow-auto text-gray-200">${JSON.stringify(displayParams, null, 2)}</pre>`;
+
+
+            // --- Detailed Cost Breakdown ---
+            html += `<h3 class="text-xl font-semibold border-b border-gray-700 pb-2 mt-8 mb-4">Detailed Cost Breakdown for a <span class="uppercase">${projectType}</span> project:</h3>`;
+
+            // Prepare data for tables
+            const materialList = [];
+            const laborOverheadList = [];
+
+            for (const key in detailedEstimate) {
+                if (key.startsWith('_')) {
+                    if (key !== '_total_man_days') {
+                        laborOverheadList.push({
+                            "Cost Factor": detailedEstimate[key].Material,
+                            "Details": detailedEstimate[key]["Quantity Required"],
+                            "Basis/Rate": detailedEstimate[key]["Unit Price"],
+                            "Total Cost": `P ${detailedEstimate[key]["Total Cost"].toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                        });
+                    }
+                } else {
+                    materialList.push({
+                        "Material": key.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+                        "Rate": `${detailedEstimate[key].rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${detailedEstimate[key].rate_unit}`,
+                        "Quantity": `${detailedEstimate[key].quantity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                        "Total Cost": `P ${detailedEstimate[key].total_cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    });
+                }
+            }
+
+            // Material Cost Table
+            html += `<h4 class="text-lg font-bold mt-6 mb-3">Construction Materials:</h4>`;
+            html += generateTable(materialList, ["Material", "Rate", "Quantity", "Total Cost"]);
+            
+            // Labor/Overhead Table
+            html += `<h4 class="text-lg font-bold mt-6 mb-3">Labor, Overhead, and Profit:</h4>`;
+            html += generateTable(laborOverheadList, ["Cost Factor", "Details", "Basis/Rate", "Total Cost"]);
+
+            // Subtotal/Adjustment Table
+            html += `<h4 class="text-lg font-bold mt-6 mb-3">ABC Adjustments:</h4>`;
+            const adjustmentList = [
+                { "Description": "Base Estimated Cost (Materials + Labor + Overhead)", "Rate": "100%", "Cost": `P ${baseCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                { "Description": `Incidental Expense (Rate: ${(INCIDENTAL_EXPENSE_RATE * 100).toFixed(0)}% of Base)`, "Rate": `+${(INCIDENTAL_EXPENSE_RATE * 100).toFixed(0)}%`, "Cost": `P ${incidentalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                { "Description": `Inflation Factor (Rate: ${(INFLATION_FACTOR * 100).toFixed(0)}% of Base)`, "Rate": `+${(INFLATION_FACTOR * 100).toFixed(0)}%`, "Cost": `P ${inflationCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                { "Description": `Financial Risk Adjustment (Rate: ${(FINANCIAL_RISK_ADJUSTMENT * 100).toFixed(0)}% of Base)`, "Rate": `+${(FINANCIAL_RISK_ADJUSTMENT * 100).toFixed(0)}%`, "Cost": `P ${riskCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+            ];
+            html += generateTable(adjustmentList, ["Description", "Rate", "Cost"]);
+            
+            resultsContainer.innerHTML += html;
+            
+            // Scroll to the top of the results container after rendering
+            resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        /**
+         * Generates an HTML table from an array of objects.
+         */
+        function generateTable(data, columns) {
+            if (data.length === 0) return `<p class="text-gray-400">No data available.</p>`;
+            
+            let table = `<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-700 border border-gray-700 rounded-lg">
+                <thead>
+                    <tr class="bg-gray-700/50 text-xs uppercase tracking-wider">`;
+            
+            columns.forEach(col => {
+                table += `<th scope="col" class="px-6 py-3 text-left font-medium text-gray-300">${col}</th>`;
+            });
+            
+            table += `</tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">`;
+            
+            data.forEach((row, index) => {
+                table += `<tr class="${index % 2 === 0 ? 'bg-gray-900/40' : 'bg-gray-900/60'}">`;
+                columns.forEach(col => {
+                    table += `<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${row[col]}</td>`;
+                });
+                table += `</tr>`;
+            });
+            
+            table += `</tbody>
+            </table></div>`;
+            return table;
+        }
+
+        // --- Event Listeners ---
+        generateBtn.addEventListener('click', generateABC);
+    </script>
+</body>
+</html>
+</body>
+</html>
+</body>
+</html>
